@@ -7,6 +7,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('verify')
         .setDescription('verify your wallet')
+		.addStringOption(option =>
+		    option.setName('hash')
+		    	.setDescription('The signed hash you got from the verification site')
+		    	.setRequired(true)),
 ]
 	.map(command => command.toJSON());
 
