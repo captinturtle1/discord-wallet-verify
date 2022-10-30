@@ -1,41 +1,24 @@
 import { ethers } from 'ethers';
-import { hashMessage } from '@ethersproject/hash';
 
-const abi = [
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			}
-		],
-		"name": "balanceOf",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
-];
-
-const provider = new ethers.providers.InfuraProvider("homestead", process.env.INFURA_API)
-let nftContract = new ethers.Contract('0xc34cc9f3cf4e1f8dd3cde01bbe985003dcfc169f', abi, provider);
-
-
-export default async function verify(interaction) {
+export default async function verify(interaction, ddb, nftContract, verifiedRoleId) {
     let user = interaction.user.id;
-    let hash = interaction.options.getString('hash')
-    if (/^0x[a-fA-F0-9]{130}$/.test(hash)) {
-        let verifySigner = ethers.utils.verifyMessage(hashMessage(user + 128), hash)
-        let passBalance = await nftContract.balanceOf(verifySigner);
-        if (passBalance > 0) {
-            await interaction.reply({ content: `${verifySigner} has ${passBalance}`, ephemeral: true});
-            interaction.guild.roles.fetch('1035187570650398801')
+    let getParams = {
+        Key: {
+         "userId": {S: `${user}`}, 
+        },
+        TableName: "gurtsHolders"
+    }
+
+    ddb.getItem(getParams, async (err, data) => {
+        if (err) {
+          console.log("Error", err);
+          await interaction.reply({ content: 'error', ephemeral: true });
+        } else {
+            let verifySigner = ethers.utils.verifyMessage(data.Item.userId.S, data.Item.signedHash.S)
+            let passBalance = await nftContract.stakedBalanceOf(verifySigner);
+            if (passBalance > 0) {
+                await interaction.reply({ content: `${verifySigner} has ${passBalance}`, ephemeral: true});
+                interaction.guild.roles.fetch(verifiedRoleId)
                 .then(role => {
                     try {
                         interaction.member.roles.add(role);
@@ -44,10 +27,9 @@ export default async function verify(interaction) {
                     }
                 })
                 .catch(console.error);
-        } else {
-            await interaction.reply({ content: `${verifySigner} is not an owner`, ephemeral: true});
+            } else {
+                await interaction.reply({ content: `${verifySigner} is not an owner`, ephemeral: true});
+            }
         }
-    } else {
-        await interaction.reply({ content: 'invalid hash', ephemeral: true});
-    }
+    })
 };
